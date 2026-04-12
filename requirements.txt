@@ -1,0 +1,6 @@
+pyrogram
+pyromod
+tgcrypto
+yt-dlp
+aiohttp
+cloudscraper
