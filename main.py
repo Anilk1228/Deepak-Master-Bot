@@ -39,7 +39,7 @@ async def process_txt_file(client: Client, m: Message):
                     links.append((parts[0].strip(), "https://" + parts[1].strip()))
         os.remove(file_path)
     except Exception as e:
-        os.remove(file_path)
+        if os.path.exists(file_path): os.remove(file_path)
         return await prog.edit(f"❌ File padhne mein error: {e}")
 
     if not links:
@@ -69,6 +69,7 @@ async def process_txt_file(client: Client, m: Message):
         vid_id = str(i + 1).zfill(3)
         mp4_file = f"{vid_id}_{clean_name}.mp4"
         dec_file = f"DEC_{vid_id}.mp4"
+        final_video = None
         
         caption = f"🎬 **Title:** `{clean_name}`\n📚 **Batch:** `{b_name}`\n⚙️ **Quality:** `{quality}p`\n🌟 **Extracted By:** {credit}"
         status_msg = await m.reply_text(f"⏳ **Processing [{vid_id}/{len(links)}]:** `{clean_name}`")
@@ -77,7 +78,7 @@ async def process_txt_file(client: Client, m: Message):
         if "classplus" in url or ".mpd" in url or "drm" in url:
             try:
                 await status_msg.edit("🔑 **Fetching DRM Key...**")
-                await asyncio.sleep(1.5) # Anti-Flood gap
+                await asyncio.sleep(1.5)
                 
                 safe_url = urllib.parse.quote(url, safe='')
                 api_url = f"https://deepak-drm-api.vercel.app/classplus?pssh={safe_url}&license_url={safe_url}&token={CLASSPLUS_TOKEN}"
@@ -90,8 +91,6 @@ async def process_txt_file(client: Client, m: Message):
                             
                             if key:
                                 await status_msg.edit(f"✅ **Key Found:** `{key}`\n📥 **Downloading...**")
-                                await asyncio.sleep(1.5)
-                                
                                 cmd = (
                                     f'yt-dlp -k --allow-unplayable-formats -f "bestvideo[height<={quality}]+bestaudio" '
                                     f'--fixup never "{url}" -o "{mp4_file}" '
@@ -103,21 +102,37 @@ async def process_txt_file(client: Client, m: Message):
                                 await status_msg.edit(f"❌ **API Error:** `{data}`")
                                 continue
             except Exception as e:
-                if "FloodWait" in str(e):
-                    wait_time = int(re.findall(r'\d+', str(e))[0])
-                    await asyncio.sleep(wait_time + 5) # Khud hi wait kar lega
-                else:
-                    await status_msg.edit(f"⚠️ Error: {e}")
+                await status_msg.edit(f"⚠️ Error: {e}")
                 continue
 
-        # --- UPLOAD SECTION MEIN BHI GAP ---
+        # --- NORMAL VIDEO LOGIC ---
+        else:
+            await status_msg.edit("📥 **Downloading Normal Video...**")
+            cmd = f'yt-dlp -f "bestvideo[height<={quality}]+bestaudio/best" "{url}" -o "{mp4_file}"'
+            await run_command(cmd)
+            final_video = mp4_file if os.path.exists(mp4_file) else None
+
+        # --- UPLOAD SECTION ---
         if final_video and os.path.exists(final_video):
             await status_msg.edit("📤 **Uploading to Telegram...**")
-            await asyncio.sleep(2) # Flood protection
+            await asyncio.sleep(2)
             try:
                 await client.send_video(chat_id=m.chat.id, video=final_video, caption=caption, supports_streaming=True)
                 await status_msg.delete()
             except Exception as e:
-                print(f"Upload error: {e}")
+                await status_msg.edit(f"❌ Upload Failed: {e}")
             finally:
                 if os.path.exists(final_video): os.remove(final_video)
+                if os.path.exists(mp4_file): os.remove(mp4_file)
+        else:
+            await status_msg.edit("❌ **Process Failed!**")
+
+    await m.reply_text("🎉 **Batch Complete! Saari videos bhej di gayi hain.**")
+
+# --- BOT STARTING BLOCK (Yahan jodna tha) ---
+if __name__ == "__main__":
+    try:
+        print("🚀 Master Bot starting...")
+        bot.run()
+    except Exception as e:
+        print(f"❌ Bot crash ho gaya! Error: {e}")
