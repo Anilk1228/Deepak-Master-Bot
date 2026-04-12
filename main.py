@@ -18,7 +18,7 @@ async def run_command(cmd):
 
 @bot.on_message(filters.command("start"))
 async def start_cmd(client, message):
-    await message.reply_text("🌟 **Deepak Master Bot Ready!** 🌟\n\nAb Master M3U8 playlists bhi bypass hongi. Send .txt file.")
+    await message.reply_text("🌟 **Deepak Master Bot Ready!** 🌟\n\nAb Token Expiry Checker bhi lag gaya hai. Send .txt file.")
 
 @bot.on_message(filters.command("stop"))
 async def stop_cmd(client, message):
@@ -62,27 +62,38 @@ async def process_txt_file(client: Client, m: Message):
         status_msg = await m.reply_text(f"⏳ **Processing:** `{name}`")
 
         try:
-            # 1. URL Bypass (Get Signed URL)
+            # 1. URL Bypass (Token Checker Ke Sath)
             if any(domain in url for domain in ["classplusapp", "videos", "tencdn"]):
-                await status_msg.edit("🔓 **Signing URL...**")
-                headers = {'x-access-token': CLASSPLUS_TOKEN}
-                api_res = requests.get(f'https://api.classplusapp.com/cams/uploader/video/jw-signed-url?url={url}', headers=headers).json()
-                url = api_res.get('url', url)
+                await status_msg.edit("🔓 **Signing URL & Checking Token...**")
+                headers = {'x-access-token': CLASSPLUS_TOKEN, 'User-Agent': 'Mozilla/5.0'}
+                
+                sign_req = requests.get(f'https://api.classplusapp.com/cams/uploader/video/jw-signed-url?url={url}', headers=headers)
+                
+                try:
+                    api_res = sign_req.json()
+                    if 'url' in api_res:
+                        url = api_res['url']
+                    else:
+                        await status_msg.edit(f"❌ **Classplus Token Expired!**\nNaya Token lagao. Response: `{api_res}`")
+                        continue
+                except:
+                    await status_msg.edit(f"❌ **API Failed.** Status: {sign_req.status_code}")
+                    continue
 
-            # 2. Local PSSH Extraction (Deep Scan)
-            await status_msg.edit("🔍 **Extracting PSSH (Deep Scan)...**")
+            # 2. Local PSSH Extraction
+            await status_msg.edit("🔍 **Extracting PSSH Locally...**")
             
-            # Browser headers zaroori hain block se bachne ke liye
+            # Google Edge Cache Error Bypass Headers
             req_headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'x-access-token': CLASSPLUS_TOKEN,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Origin': 'https://web.classplusapp.com',
                 'Referer': 'https://web.classplusapp.com/'
             }
             
-            mpd_text = requests.get(url, headers=req_headers).text
+            mpd_req = requests.get(url, headers=req_headers)
+            mpd_text = mpd_req.text
             
-            # Agar master playlist hai, toh asli video link nikalna hoga
+            # Agar master playlist hai
             if ".m3u8" in url and "#EXT-X-STREAM-INF" in mpd_text:
                 for line in mpd_text.splitlines():
                     if line.strip() and not line.startswith('#'):
@@ -90,15 +101,13 @@ async def process_txt_file(client: Client, m: Message):
                         mpd_text = requests.get(variant_url, headers=req_headers).text
                         break
             
-            # PSSH dhoondhna
             pssh_match = re.search(r'<cenc:pssh[^>]*>(.*?)</cenc:pssh>', mpd_text, re.I | re.S)
             if not pssh_match:
                 pssh_match = re.search(r'URI="data:text/plain;base64,([^"]+)"', mpd_text)
             
             if not pssh_match:
-                # Agar fail hua, toh batayega ki server ne kya bheja hai (error debug karne mein madad milegi)
                 clean_text = mpd_text[:150].replace('<', '&lt;').replace('>', '&gt;')
-                await status_msg.edit(f"❌ **PSSH not found!** Server Response:\n`{clean_text}`")
+                await status_msg.edit(f"❌ **PSSH not found!** Google Response:\n`{clean_text}`")
                 continue
                 
             extracted_pssh = pssh_match.group(1).strip().replace("\n", "")
