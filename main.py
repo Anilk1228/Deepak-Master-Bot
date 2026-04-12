@@ -7,7 +7,11 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 from pyromod import listen
 from aiohttp import ClientSession
-from config import API_ID, API_HASH, BOT_TOKEN, CLASSPLUS_TOKEN
+# CLASSPLUS_TOKEN ko config se hata diya hai, ab yahan direct use hoga
+from config import API_ID, API_HASH, BOT_TOKEN
+
+# 🔥 AAPKA NAYA FRESH TOKEN YAHAN DIRECT DAAL DIYA HAI 🔥
+CLASSPLUS_TOKEN = "eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg2NzkyMTQsIm9yZ0lkIjoxMjg2LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTgyMTAxNjk5NTEiLCJuYW1lIjoiUHJpbmNlIFBpYSIsImVtYWlsIjoiamV1cHBjbDQ2QGdtYWlsLmNvbSIsImlzSW50ZXJuYXRpb25hbCI6MCwiZGVmYXVsdExhbmd1YWdlIjoiRU4iLCJjb3VudHJ5Q29kZSI6IklOIiwiY291bnRyeUlTTyI6IjkxIiwidGltZXpvbmUiOiJHTVQrNTozMCIsImlzRGl5Ijp0cnVlLCJvcmdDb2RlIjoiZWFkIiwiaXNEaXlTdWJhZG1pbiI6MCwiZmluZ2VycHJpbnRJZCI6IjFmYTlkYTI4NGYyODliZjNkMTdmODJiYTYxYzhmMmExIiwiaWF0IjoxNzc2MDAxODUwLCJleHAiOjE3NzY2MDY2NTB9.JQ85B0Y0cjYwnkkiFEydVGBBSmSwfId3Guky6WuOXM5WrnJdn6QLSwjT5R1wz08Z"
 
 bot = Client("MasterBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 stop_batch = {}
@@ -18,7 +22,7 @@ async def run_command(cmd):
 
 @bot.on_message(filters.command("start"))
 async def start_cmd(client, message):
-    await message.reply_text("🌟 **Deepak Master Bot Ready!** 🌟\n\nAb Token Expiry Checker bhi lag gaya hai. Send .txt file.")
+    await message.reply_text("🌟 **Deepak Master Bot Ready!** 🌟\n\nAb Token Hardcoded hai aur Errors fix ho gaye hain. Send .txt file.")
 
 @bot.on_message(filters.command("stop"))
 async def stop_cmd(client, message):
@@ -74,7 +78,7 @@ async def process_txt_file(client: Client, m: Message):
                     if 'url' in api_res:
                         url = api_res['url']
                     else:
-                        await status_msg.edit(f"❌ **Classplus Token Expired!**\nNaya Token lagao. Response: `{api_res}`")
+                        await status_msg.edit(f"❌ **Classplus Token Expired/Invalid!**\nResponse: `{api_res}`")
                         continue
                 except:
                     await status_msg.edit(f"❌ **API Failed.** Status: {sign_req.status_code}")
