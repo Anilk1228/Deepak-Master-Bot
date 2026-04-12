@@ -77,24 +77,27 @@ async def process_txt_file(client: Client, m: Message):
         caption = f"🎬 **Title:** `{clean_name}`\n📚 **Batch:** `{b_name}`\n⚙️ **Quality:** `{quality}p`\n🌟 **Extracted By:** {credit}"
         status_msg = await m.reply_text(f"⏳ **Processing [{vid_id}/{len(links)}]:** `{clean_name}`")
 
-        # --- DRM / CLASSPLUS LOGIC ---
+# --- DRM / CLASSPLUS LOGIC ---
         if "classplus" in url or ".mpd" in url or "drm" in url:
             await status_msg.edit("🔑 **Fetching DRM Key...**")
             
-            # Aapki API hit kar rahe hain (Token parameter ke sath)
             api_url = f"https://deepak-drm-api.vercel.app/classplus?pssh={url}&license_url={url}&token={CLASSPLUS_TOKEN}"
+            headers = {"x-access-token": CLASSPLUS_TOKEN} # Token ko headers mein bhi daal diya
             
             try:
                 async with ClientSession() as session:
-                    async with session.get(api_url) as resp:
+                    async with session.get(api_url, headers=headers) as resp:
                         if resp.status == 200:
-                            data = await resp.json()
+                            try:
+                                data = await resp.json()
+                            except:
+                                data = {"error": await resp.text()}
+                            
                             key = data.get("KEYS")
                             
                             if key:
                                 await status_msg.edit(f"✅ **Key Found:** `{key}`\n📥 **Downloading & Decrypting...**")
                                 
-                                # Magic Command: Download aur Decrypt ek sath
                                 cmd = (
                                     f'yt-dlp -k --allow-unplayable-formats -f "bestvideo[height<={quality}]+bestaudio" '
                                     f'--fixup never "{url}" -o "{mp4_file}" '
@@ -103,10 +106,11 @@ async def process_txt_file(client: Client, m: Message):
                                 await run_command(cmd)
                                 final_video = dec_file if os.path.exists(dec_file) else None
                             else:
-                                await status_msg.edit("❌ **Key nahi mili API se!**")
+                                # Yahan API ka asli error Telegram par dikhega
+                                await status_msg.edit(f"❌ **API Error:** `{data}`")
                                 continue
                         else:
-                            await status_msg.edit(f"⚠️ **API Error:** {resp.status}")
+                            await status_msg.edit(f"⚠️ **API Server Error:** {resp.status}")
                             continue
             except Exception as e:
                 await status_msg.edit(f"⚠️ **DRM Error:** {e}")
