@@ -8,8 +8,10 @@ from pyromod import listen
 from aiohttp import ClientSession
 from config import API_ID, API_HASH, BOT_TOKEN, CLASSPLUS_TOKEN
 
-# Bot Client Setup
 bot = Client("MasterBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
+# 🛑 Stop function track karne ke liye dictionary
+stop_batch = {}
 
 # System Command chalane ka helper function
 async def run_command(cmd):
@@ -20,12 +22,21 @@ async def run_command(cmd):
 
 @bot.on_message(filters.command("start"))
 async def start_cmd(client, message):
-    await message.reply_text("🌟 **Welcome to Master DRM Bot!** 🌟\n\nBhai, aap mujhe apni `.txt` file bhejo, main aapse details puchunga aur downloading shuru kar dunga.")
+    await message.reply_text("🌟 **Welcome to Master DRM Bot!** 🌟\n\nBhai, aap mujhe apni `.txt` file bhejo, main aapse details puchunga.\n\n💡 *Tip: Kisi bhi chalte huye batch ko rokne ke liye aap `/stop` bhej sakte hain.*")
+
+# 🛑 Naya Stop Command Logic
+@bot.on_message(filters.command("stop"))
+async def stop_cmd(client, message):
+    stop_batch[message.chat.id] = True
+    await message.reply_text("🛑 **Stop Command Received!**\nJo video abhi process ho rahi hai bas wo complete hogi, aur uske baad batch ruk jayega.")
 
 @bot.on_message(filters.document & filters.private)
 async def process_txt_file(client: Client, m: Message):
     if not m.document.file_name.endswith(".txt"):
         return await m.reply_text("❌ Kripya sirf `.txt` file hi bhejein!")
+
+    # Naya batch start hote hi stop flag reset kar dena
+    stop_batch[m.chat.id] = False
 
     prog = await m.reply_text("📁 **TXT File mil gayi! Scan kar raha hoon...**")
     file_path = await m.download()
@@ -44,6 +55,9 @@ async def process_txt_file(client: Client, m: Message):
 
     if not links:
         return await prog.edit("❌ File mein koi valid link nahi hai!")
+
+    # Classplus License URL
+    LICENSE_URL = "https://appx.classplusapp.com/get-drm-license"
 
     await prog.edit(f"✅ **Total Links Found:** {len(links)}")
 
@@ -64,6 +78,12 @@ async def process_txt_file(client: Client, m: Message):
 
     # Processing Loop
     for i, (raw_name, url) in enumerate(links):
+        
+        # 🛑 Check karna ki user ne /stop toh nahi bheja
+        if stop_batch.get(m.chat.id, False):
+            await m.reply_text(f"🛑 **Batch yahin rok diya gaya hai!** ({i} videos done)")
+            break
+
         clean_name = re.sub(r'[\\/*?:"<>|]', "", raw_name)[:60]
         vid_id = str(i + 1).zfill(3)
         mp4_file = f"{vid_id}_{clean_name}.mp4"
@@ -75,13 +95,29 @@ async def process_txt_file(client: Client, m: Message):
 
         try:
             if "classplus" in url or ".mpd" in url or "drm" in url:
+                await status_msg.edit("🔍 **MPD file se PSSH nikal raha hoon...**")
+                
+                # 🔥 PSSH EXTRACTOR LOGIC
+                pssh_string = None
+                async with ClientSession() as session:
+                    async with session.get(url) as mpd_resp:
+                        if mpd_resp.status == 200:
+                            mpd_text = await mpd_resp.text()
+                            # MPD ke andar se PSSH dhundhna
+                            pssh_match = re.search(r'<cenc:pssh[^>]*>(.*?)</cenc:pssh>', mpd_text)
+                            if pssh_match:
+                                pssh_string = pssh_match.group(1)
+                
+                if not pssh_string:
+                    await status_msg.edit("❌ **Error:** MPD link se PSSH nahi mila!")
+                    continue
+
                 await status_msg.edit("🔑 **Fetching DRM Key...**")
                 await asyncio.sleep(2) # Flood protection
-
-
                 
-                safe_pssh = urllib.parse.quote(url, safe='')
-                safe_license = urllib.parse.quote(url, safe='')
+                safe_pssh = urllib.parse.quote(pssh_string, safe='')
+                safe_license = urllib.parse.quote(LICENSE_URL, safe='')
+                
                 api_url = f"https://deepak-drm-api.vercel.app/classplus?pssh={safe_pssh}&license_url={safe_license}&token={CLASSPLUS_TOKEN}"
                 
                 async with ClientSession() as session:
@@ -129,9 +165,12 @@ async def process_txt_file(client: Client, m: Message):
             if os.path.exists(mp4_file): os.remove(mp4_file)
             if final_video and os.path.exists(final_video): os.remove(final_video)
 
-    await m.reply_text("🎉 **Batch Complete!**")
+    # 🛑 Final Message check karna ki naturally khatam hua ya roka gaya hai
+    if stop_batch.get(m.chat.id, False):
+        await m.reply_text("🛑 **Process ko manually rok diya gaya tha.**")
+    else:
+        await m.reply_text("🎉 **Batch Complete! Saari videos bhej di gayi hain.**")
 
-# --- YE BLOCK SABSE ZAROORI HAI ---
 if __name__ == "__main__":
     try:
         print("🚀 Deepak Master Bot starting...")
