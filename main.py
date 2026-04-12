@@ -77,9 +77,12 @@ async def process_txt_file(client: Client, m: Message):
             if "classplus" in url or ".mpd" in url or "drm" in url:
                 await status_msg.edit("🔑 **Fetching DRM Key...**")
                 await asyncio.sleep(2) # Flood protection
+
+
                 
-                safe_url = urllib.parse.quote(url, safe='') # Ye '+' aur '=' ko safe rakhta hai
-                api_url = f"https://deepak-drm-api.vercel.app/classplus?pssh={safe_url}&license_url={safe_url}&token={CLASSPLUS_TOKEN}"
+                safe_pssh = urllib.parse.quote(url, safe='')
+                safe_license = urllib.parse.quote(url, safe='')
+                api_url = f"https://deepak-drm-api.vercel.app/classplus?pssh={safe_pssh}&license_url={safe_license}&token={CLASSPLUS_TOKEN}"
                 
                 async with ClientSession() as session:
                     async with session.get(api_url) as resp:
