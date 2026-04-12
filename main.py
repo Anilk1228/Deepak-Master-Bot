@@ -75,22 +75,23 @@ async def process_txt_file(client: Client, m: Message):
 
         # --- DRM / CLASSPLUS LOGIC ---
         if "classplus" in url or ".mpd" in url or "drm" in url:
-            await status_msg.edit("🔑 **Fetching DRM Key...**")
-            
-            # 🔥 FIX: URL Encoding taaki Base64 characters (+, /) kharab na ho
-            safe_url = urllib.parse.quote(url, safe='')
-            api_url = f"https://deepak-drm-api.vercel.app/classplus?pssh={safe_url}&license_url={safe_url}&token={CLASSPLUS_TOKEN}"
-            headers = {"x-access-token": CLASSPLUS_TOKEN}
-            
             try:
+                await status_msg.edit("🔑 **Fetching DRM Key...**")
+                await asyncio.sleep(1.5) # Anti-Flood gap
+                
+                safe_url = urllib.parse.quote(url, safe='')
+                api_url = f"https://deepak-drm-api.vercel.app/classplus?pssh={safe_url}&license_url={safe_url}&token={CLASSPLUS_TOKEN}"
+                
                 async with ClientSession() as session:
-                    async with session.get(api_url, headers=headers) as resp:
+                    async with session.get(api_url) as resp:
                         if resp.status == 200:
                             data = await resp.json()
                             key = data.get("KEYS")
                             
                             if key:
                                 await status_msg.edit(f"✅ **Key Found:** `{key}`\n📥 **Downloading...**")
+                                await asyncio.sleep(1.5)
+                                
                                 cmd = (
                                     f'yt-dlp -k --allow-unplayable-formats -f "bestvideo[height<={quality}]+bestaudio" '
                                     f'--fixup never "{url}" -o "{mp4_file}" '
@@ -101,34 +102,22 @@ async def process_txt_file(client: Client, m: Message):
                             else:
                                 await status_msg.edit(f"❌ **API Error:** `{data}`")
                                 continue
-                        else:
-                            await status_msg.edit(f"⚠️ **API Server Error:** {resp.status}")
-                            continue
             except Exception as e:
-                await status_msg.edit(f"⚠️ **DRM Error:** {e}")
+                if "FloodWait" in str(e):
+                    wait_time = int(re.findall(r'\d+', str(e))[0])
+                    await asyncio.sleep(wait_time + 5) # Khud hi wait kar lega
+                else:
+                    await status_msg.edit(f"⚠️ Error: {e}")
                 continue
 
-        # --- NORMAL VIDEO LOGIC ---
-        else:
-            await status_msg.edit("📥 **Downloading Normal Video...**")
-            cmd = f'yt-dlp -f "bestvideo[height<={quality}]+bestaudio/best" "{url}" -o "{mp4_file}"'
-            await run_command(cmd)
-            final_video = mp4_file if os.path.exists(mp4_file) else None
-
-        # --- UPLOAD ---
+        # --- UPLOAD SECTION MEIN BHI GAP ---
         if final_video and os.path.exists(final_video):
-            await status_msg.edit("📤 **Uploading...**")
+            await status_msg.edit("📤 **Uploading to Telegram...**")
+            await asyncio.sleep(2) # Flood protection
             try:
                 await client.send_video(chat_id=m.chat.id, video=final_video, caption=caption, supports_streaming=True)
                 await status_msg.delete()
             except Exception as e:
-                await status_msg.edit(f"❌ Upload Failed: {e}")
+                print(f"Upload error: {e}")
             finally:
                 if os.path.exists(final_video): os.remove(final_video)
-        else:
-            await status_msg.edit("❌ **Process Failed!**")
-
-    await m.reply_text("🎉 **Batch Complete!**")
-
-if __name__ == "__main__":
-    bot.run()
