@@ -18,12 +18,12 @@ async def run_command(cmd):
 
 @bot.on_message(filters.command("start"))
 async def start_cmd(client, message):
-    await message.reply_text("🌟 **Deepak Master Bot Ready!** 🌟\n\nAb 403 Error Bypass Hoga. Send .txt file.")
+    await message.reply_text("🌟 **Deepak Master Bot Ready!** 🌟\n\nAb Master M3U8 playlists bhi bypass hongi. Send .txt file.")
 
 @bot.on_message(filters.command("stop"))
 async def stop_cmd(client, message):
     stop_batch[message.chat.id] = True
-    await message.reply_text("🛑 **Stop Command Received!**")
+    await message.reply_text("🛑 **Stop Command Received!** Current video ke baad batch ruk jayega.")
 
 @bot.on_message(filters.document & filters.private)
 async def process_txt_file(client: Client, m: Message):
@@ -69,16 +69,36 @@ async def process_txt_file(client: Client, m: Message):
                 api_res = requests.get(f'https://api.classplusapp.com/cams/uploader/video/jw-signed-url?url={url}', headers=headers).json()
                 url = api_res.get('url', url)
 
-            # 2. Local PSSH Extraction (To Bypass 403)
-            await status_msg.edit("🔍 **Extracting PSSH Locally...**")
-            mpd_text = requests.get(url).text
+            # 2. Local PSSH Extraction (Deep Scan)
+            await status_msg.edit("🔍 **Extracting PSSH (Deep Scan)...**")
             
+            # Browser headers zaroori hain block se bachne ke liye
+            req_headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'x-access-token': CLASSPLUS_TOKEN,
+                'Origin': 'https://web.classplusapp.com',
+                'Referer': 'https://web.classplusapp.com/'
+            }
+            
+            mpd_text = requests.get(url, headers=req_headers).text
+            
+            # Agar master playlist hai, toh asli video link nikalna hoga
+            if ".m3u8" in url and "#EXT-X-STREAM-INF" in mpd_text:
+                for line in mpd_text.splitlines():
+                    if line.strip() and not line.startswith('#'):
+                        variant_url = urllib.parse.urljoin(url, line.strip())
+                        mpd_text = requests.get(variant_url, headers=req_headers).text
+                        break
+            
+            # PSSH dhoondhna
             pssh_match = re.search(r'<cenc:pssh[^>]*>(.*?)</cenc:pssh>', mpd_text, re.I | re.S)
             if not pssh_match:
                 pssh_match = re.search(r'URI="data:text/plain;base64,([^"]+)"', mpd_text)
             
             if not pssh_match:
-                await status_msg.edit("❌ **PSSH not found in local file!** Link expired ya invalid hai.")
+                # Agar fail hua, toh batayega ki server ne kya bheja hai (error debug karne mein madad milegi)
+                clean_text = mpd_text[:150].replace('<', '&lt;').replace('>', '&gt;')
+                await status_msg.edit(f"❌ **PSSH not found!** Server Response:\n`{clean_text}`")
                 continue
                 
             extracted_pssh = pssh_match.group(1).strip().replace("\n", "")
@@ -96,17 +116,18 @@ async def process_txt_file(client: Client, m: Message):
             # 4. Decrypt & Upload
             if key:
                 await status_msg.edit(f"✅ **Key:** `{key}`\n📥 **Downloading...**")
-                dec_file = f"{name}.mp4"
+                dec_file = f"DEC_{str(i+1).zfill(3)}.mp4"
+                
                 cmd = (
                     f'yt-dlp -k --allow-unplayable-formats -f "bestvideo[height<={quality}]+bestaudio" '
-                    f'--fixup never "{url}" -o "temp_{name}.mp4" '
+                    f'--fixup never "{url}" -o "temp_{dec_file}" '
                     f'--exec "mp4decrypt --key {key} {{}} \'{dec_file}\' && rm {{}}"'
                 )
                 await run_command(cmd)
                 
                 if os.path.exists(dec_file):
                     await status_msg.edit("📤 **Uploading...**")
-                    await client.send_video(m.chat.id, video=dec_file, caption=f"🎬 {name}\n📚 {b_name}")
+                    await client.send_video(m.chat.id, video=dec_file, caption=f"🎬 {name}\n📚 {b_name}", supports_streaming=True)
                     os.remove(dec_file)
                     await status_msg.delete()
                 else:
