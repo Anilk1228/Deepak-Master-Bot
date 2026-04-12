@@ -1,12 +1,11 @@
 import os
 import re
 import asyncio
+import urllib.parse
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pyromod import listen
 from aiohttp import ClientSession
-import cloudscraper
-import urllib.parse
 from config import API_ID, API_HASH, BOT_TOKEN, CLASSPLUS_TOKEN
 
 bot = Client("MasterBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -48,24 +47,21 @@ async def process_txt_file(client: Client, m: Message):
 
     await prog.edit(f"✅ **Total Links Found:** {len(links)}")
 
-    # 2. Interactive Menu (Batch, Resolution, Credit)
+    # 2. Interactive Menu
     try:
-        # Batch Name
         batch_msg = await bot.ask(m.chat.id, "📚 **Enter Batch Name:**\n*(Ya default ke liye 'd' bhejein)*", timeout=60)
         b_name = m.document.file_name.replace(".txt", "") if batch_msg.text.lower() == 'd' else batch_msg.text
         
-        # Resolution
         res_msg = await bot.ask(m.chat.id, "⚙️ **Enter Resolution (144, 240, 360, 480, 720, 1080):**", timeout=60)
         quality = res_msg.text if res_msg.text in ["144", "240", "360", "480", "720", "1080"] else "720"
         
-        # Extracted By / Credit Name
         credit_msg = await bot.ask(m.chat.id, "✍️ **Enter Your Name/Channel Name:**\n*(Ya default ke liye 'd' bhejein)*", timeout=60)
         credit = "Deepak Master Bot" if credit_msg.text.lower() == 'd' else credit_msg.text
 
     except asyncio.TimeoutError:
-        return await m.reply_text("❌ **Time out!** Aapne jaldi reply nahi kiya. Wapas file bhejein.")
+        return await m.reply_text("❌ **Time out!** Aapne jaldi reply nahi kiya.")
 
-    await m.reply_text(f"🚀 **Downloading Shuru!**\n\n📚 Batch: {b_name}\n⚙️ Quality: {quality}p\n✍️ Credit: {credit}")
+    await m.reply_text(f"🚀 **Downloading Shuru!**\n📚 Batch: {b_name}\n⚙️ Quality: {quality}p")
 
     # 3. Processing Loop
     for i, (raw_name, url) in enumerate(links):
@@ -77,27 +73,24 @@ async def process_txt_file(client: Client, m: Message):
         caption = f"🎬 **Title:** `{clean_name}`\n📚 **Batch:** `{b_name}`\n⚙️ **Quality:** `{quality}p`\n🌟 **Extracted By:** {credit}"
         status_msg = await m.reply_text(f"⏳ **Processing [{vid_id}/{len(links)}]:** `{clean_name}`")
 
-# --- DRM / CLASSPLUS LOGIC ---
+        # --- DRM / CLASSPLUS LOGIC ---
         if "classplus" in url or ".mpd" in url or "drm" in url:
             await status_msg.edit("🔑 **Fetching DRM Key...**")
             
-            api_url = f"https://deepak-drm-api.vercel.app/classplus?pssh={url}&license_url={url}&token={CLASSPLUS_TOKEN}"
-            headers = {"x-access-token": CLASSPLUS_TOKEN} # Token ko headers mein bhi daal diya
+            # 🔥 FIX: URL Encoding taaki Base64 characters (+, /) kharab na ho
+            safe_url = urllib.parse.quote(url, safe='')
+            api_url = f"https://deepak-drm-api.vercel.app/classplus?pssh={safe_url}&license_url={safe_url}&token={CLASSPLUS_TOKEN}"
+            headers = {"x-access-token": CLASSPLUS_TOKEN}
             
             try:
                 async with ClientSession() as session:
                     async with session.get(api_url, headers=headers) as resp:
                         if resp.status == 200:
-                            try:
-                                data = await resp.json()
-                            except:
-                                data = {"error": await resp.text()}
-                            
+                            data = await resp.json()
                             key = data.get("KEYS")
                             
                             if key:
-                                await status_msg.edit(f"✅ **Key Found:** `{key}`\n📥 **Downloading & Decrypting...**")
-                                
+                                await status_msg.edit(f"✅ **Key Found:** `{key}`\n📥 **Downloading...**")
                                 cmd = (
                                     f'yt-dlp -k --allow-unplayable-formats -f "bestvideo[height<={quality}]+bestaudio" '
                                     f'--fixup never "{url}" -o "{mp4_file}" '
@@ -106,7 +99,6 @@ async def process_txt_file(client: Client, m: Message):
                                 await run_command(cmd)
                                 final_video = dec_file if os.path.exists(dec_file) else None
                             else:
-                                # Yahan API ka asli error Telegram par dikhega
                                 await status_msg.edit(f"❌ **API Error:** `{data}`")
                                 continue
                         else:
@@ -118,32 +110,25 @@ async def process_txt_file(client: Client, m: Message):
 
         # --- NORMAL VIDEO LOGIC ---
         else:
-            await status_msg.edit("📥 **Normal Video Download ho rahi hai...**")
+            await status_msg.edit("📥 **Downloading Normal Video...**")
             cmd = f'yt-dlp -f "bestvideo[height<={quality}]+bestaudio/best" "{url}" -o "{mp4_file}"'
             await run_command(cmd)
             final_video = mp4_file if os.path.exists(mp4_file) else None
 
-        # --- UPLOAD TO TELEGRAM ---
+        # --- UPLOAD ---
         if final_video and os.path.exists(final_video):
-            await status_msg.edit("📤 **Telegram par Upload ho raha hai...**")
+            await status_msg.edit("📤 **Uploading...**")
             try:
-                await client.send_video(
-                    chat_id=m.chat.id,
-                    video=final_video,
-                    caption=caption,
-                    supports_streaming=True
-                )
+                await client.send_video(chat_id=m.chat.id, video=final_video, caption=caption, supports_streaming=True)
                 await status_msg.delete()
             except Exception as e:
                 await status_msg.edit(f"❌ Upload Failed: {e}")
             finally:
-                if os.path.exists(final_video):
-                    os.remove(final_video)
+                if os.path.exists(final_video): os.remove(final_video)
         else:
-            await status_msg.edit("❌ **Download/Decryption fail ho gaya.**")
+            await status_msg.edit("❌ **Process Failed!**")
 
-    await m.reply_text("🎉 **Batch Complete! Saari videos bhej di gayi hain.**")
+    await m.reply_text("🎉 **Batch Complete!**")
 
 if __name__ == "__main__":
-    print("🚀 Master Bot is Running...")
     bot.run()
