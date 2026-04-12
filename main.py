@@ -63,76 +63,41 @@ async def process_txt_file(client: Client, m: Message):
 
     await m.reply_text(f"🚀 **Downloading Shuru!**\n📚 Batch: {b_name}\n⚙️ Quality: {quality}p")
 
-    # 3. Processing Loop
+# Processing Loop ke andar jahan status_msg.edit hai, wahan ye logic lagaen:
+
     for i, (raw_name, url) in enumerate(links):
-        clean_name = re.sub(r'[\\/*?:"<>|]', "", raw_name)[:60]
-        vid_id = str(i + 1).zfill(3)
-        mp4_file = f"{vid_id}_{clean_name}.mp4"
-        dec_file = f"DEC_{vid_id}.mp4"
-        final_video = None
+        # ... (baaki ka purana code)
         
-        caption = f"🎬 **Title:** `{clean_name}`\n📚 **Batch:** `{b_name}`\n⚙️ **Quality:** `{quality}p`\n🌟 **Extracted By:** {credit}"
         status_msg = await m.reply_text(f"⏳ **Processing [{vid_id}/{len(links)}]:** `{clean_name}`")
 
-        # --- DRM / CLASSPLUS LOGIC ---
-        if "classplus" in url or ".mpd" in url or "drm" in url:
-            try:
+        try:
+            # --- DRM / CLASSPLUS LOGIC ---
+            if "classplus" in url or ".mpd" in url or "drm" in url:
                 await status_msg.edit("🔑 **Fetching DRM Key...**")
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(4) # 🟢 Gap badha diya hai (Anti-Flood)
                 
-                safe_url = urllib.parse.quote(url, safe='')
-                api_url = f"https://deepak-drm-api.vercel.app/classplus?pssh={safe_url}&license_url={safe_url}&token={CLASSPLUS_TOKEN}"
+                # ... (API calling logic)
                 
-                async with ClientSession() as session:
-                    async with session.get(api_url) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            key = data.get("KEYS")
-                            
-                            if key:
-                                await status_msg.edit(f"✅ **Key Found:** `{key}`\n📥 **Downloading...**")
-                                cmd = (
-                                    f'yt-dlp -k --allow-unplayable-formats -f "bestvideo[height<={quality}]+bestaudio" '
-                                    f'--fixup never "{url}" -o "{mp4_file}" '
-                                    f'--exec "mp4decrypt --key {key} {{}} {dec_file} && rm {{}}"'
-                                )
-                                await run_command(cmd)
-                                final_video = dec_file if os.path.exists(dec_file) else None
-                            else:
-                                await status_msg.edit(f"❌ **API Error:** `{data}`")
-                                continue
-            except Exception as e:
-                await status_msg.edit(f"⚠️ Error: {e}")
-                continue
-
-        # --- NORMAL VIDEO LOGIC ---
-        else:
-            await status_msg.edit("📥 **Downloading Normal Video...**")
-            cmd = f'yt-dlp -f "bestvideo[height<={quality}]+bestaudio/best" "{url}" -o "{mp4_file}"'
-            await run_command(cmd)
-            final_video = mp4_file if os.path.exists(mp4_file) else None
-
-        # --- UPLOAD SECTION ---
-        if final_video and os.path.exists(final_video):
-            await status_msg.edit("📤 **Uploading to Telegram...**")
-            await asyncio.sleep(2)
-            try:
-                await client.send_video(chat_id=m.chat.id, video=final_video, caption=caption, supports_streaming=True)
+                if key:
+                    await status_msg.edit(f"✅ **Key Found!**\n📥 **Downloading...**")
+                    await asyncio.sleep(3) # 🟢 Ek aur gap
+                    
+                    # ... (yt-dlp command logic)
+                    
+            # --- UPLOAD SECTION ---
+            if final_video and os.path.exists(final_video):
+                await status_msg.edit("📤 **Uploading to Telegram...**")
+                await asyncio.sleep(5) # 🟢 Upload se pehle lamba pause
+                
+                await client.send_video(chat_id=m.chat.id, video=final_video, caption=caption)
                 await status_msg.delete()
-            except Exception as e:
-                await status_msg.edit(f"❌ Upload Failed: {e}")
-            finally:
-                if os.path.exists(final_video): os.remove(final_video)
-                if os.path.exists(mp4_file): os.remove(mp4_file)
-        else:
-            await status_msg.edit("❌ **Process Failed!**")
-
-    await m.reply_text("🎉 **Batch Complete! Saari videos bhej di gayi hain.**")
-
-# --- BOT STARTING BLOCK (Yahan jodna tha) ---
-if __name__ == "__main__":
-    try:
-        print("🚀 Master Bot starting...")
-        bot.run()
-    except Exception as e:
-        print(f"❌ Bot crash ho gaya! Error: {e}")
+                
+        except Exception as e:
+            # 🔥 Agar Telegram FloodWait bhejta hai toh bot yahan handle karega
+            if "FloodWait" in str(e):
+                wait_time = int(re.findall(r'\d+', str(e))[0])
+                print(f"⚠️ Telegram speed limit! Waiting for {wait_time} seconds...")
+                await asyncio.sleep(wait_time + 5) # Bot khud hi wait karke resume karega
+            else:
+                print(f"❌ Error: {e}")
+            continue
