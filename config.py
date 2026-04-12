@@ -1,0 +1,11 @@
+import os
+
+# Apne Telegram API details yahan daalein
+API_ID = 20807000
+API_HASH = "cde2366a7c61e23f4cb44618cbe6cf70"
+
+# Apne naye Bot ka token yahan daalein (Purana wala revoke kar dena security ke liye)
+BOT_TOKEN = "8564398983:AAHuuntq53gVgwIxQash63fatvHq-27BJTc"
+
+# Classplus ka JWT Login token (Jo eyJhbGci se shuru hota hai)
+CLASSPLUS_TOKEN = "eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg2NzkyMTQsIm9yZ0lkIjoxMjg2LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTgyMTAxNjk5NTEiLCJuYW1lIjoiUHJpbmNlIFBpYSIsImVtYWlsIjoiamV1cHBjbDQ2QGdtYWlsLmNvbSIsImlzSW50ZXJuYXRpb25hbCI6MCwiZGVmYXVsdExhbmd1YWdlIjoiRU4iLCJjb3VudHJ5Q29kZSI6IklOIiwiY291bnRyeUlTTyI6IjkxIiwidGltZXpvbmUiOiJHTVQrNTozMCIsImlzRGl5Ijp0cnVlLCJvcmdDb2RlIjoiZWFkIiwiaXNEaXlTdWJhZG1pbiI6MCwiZmluZ2VycHJpbnRJZCI6IjFmYTlkYTI4NGYyODliZjNkMTdmODJiYTYxYzhmMmExIiwiaWF0IjoxNzc2MDAxODUwLCJleHAiOjE3NzY2MDY2NTB9.JQ85B0Y0cjYwnkkiFEydVGBBSmSwfId3Guky6WuOXM5WrnJdn6QLSwjT5R1wz08Z"
